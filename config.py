@@ -1,4 +1,4 @@
-ESP_HOST = "192.168.68.60"
+ESP_HOST = "your esp ip"
 ESP_PORT = 4210
 
 WIDTH = 128
