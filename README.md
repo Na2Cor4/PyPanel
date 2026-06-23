@@ -29,10 +29,10 @@ py -m venv .venv
 pip install -r requirements.txt
 python main.py
 
-Edit config.py before running:
+## Edit config.py before running:
 
 ESP_HOST = "192.168.x.x"
 ESP_PORT = 4210
 FPS = 2
 
-For ESP Wi-Fi setup, copy secrets.h.example to secrets.h and fill in your Wi-Fi name and password.
+## For ESP Wi-Fi setup, copy secrets.h.example to secrets.h and fill in your Wi-Fi name and password.
