@@ -1,0 +1,212 @@
+from datetime import datetime
+from typing import Any
+
+from config import HEIGHT, WIDTH
+
+
+FRAMEBUFFER_SIZE = WIDTH * HEIGHT // 8
+CELL_WIDTH = 6
+GLYPH_WIDTH = 5
+DEGREE_WIDTH = 4
+
+# Exact 5-column bytes for the supported characters, copied from the classic
+# Adafruit_GFX glcdfont.c table. Each byte is one vertical column, bit0 at top.
+FONT_5X7_COLUMNS: dict[str, tuple[int, int, int, int, int]] = {
+    " ": (0x00, 0x00, 0x00, 0x00, 0x00),
+    "0": (0x3E, 0x51, 0x49, 0x45, 0x3E),
+    "1": (0x00, 0x42, 0x7F, 0x40, 0x00),
+    "2": (0x72, 0x49, 0x49, 0x49, 0x46),
+    "3": (0x21, 0x41, 0x49, 0x4D, 0x33),
+    "4": (0x18, 0x14, 0x12, 0x7F, 0x10),
+    "5": (0x27, 0x45, 0x45, 0x45, 0x39),
+    "6": (0x3C, 0x4A, 0x49, 0x49, 0x31),
+    "7": (0x41, 0x21, 0x11, 0x09, 0x07),
+    "8": (0x36, 0x49, 0x49, 0x49, 0x36),
+    "9": (0x46, 0x49, 0x49, 0x29, 0x1E),
+    "A": (0x7C, 0x12, 0x11, 0x12, 0x7C),
+    "B": (0x7F, 0x49, 0x49, 0x49, 0x36),
+    "C": (0x3E, 0x41, 0x41, 0x41, 0x22),
+    "D": (0x7F, 0x41, 0x41, 0x41, 0x3E),
+    "E": (0x7F, 0x49, 0x49, 0x49, 0x41),
+    "F": (0x7F, 0x09, 0x09, 0x09, 0x01),
+    "G": (0x3E, 0x41, 0x41, 0x51, 0x73),
+    "H": (0x7F, 0x08, 0x08, 0x08, 0x7F),
+    "I": (0x00, 0x41, 0x7F, 0x41, 0x00),
+    "J": (0x20, 0x40, 0x41, 0x3F, 0x01),
+    "K": (0x7F, 0x08, 0x14, 0x22, 0x41),
+    "L": (0x7F, 0x40, 0x40, 0x40, 0x40),
+    "M": (0x7F, 0x02, 0x1C, 0x02, 0x7F),
+    "N": (0x7F, 0x04, 0x08, 0x10, 0x7F),
+    "O": (0x3E, 0x41, 0x41, 0x41, 0x3E),
+    "P": (0x7F, 0x09, 0x09, 0x09, 0x06),
+    "Q": (0x3E, 0x41, 0x51, 0x21, 0x5E),
+    "R": (0x7F, 0x09, 0x19, 0x29, 0x46),
+    "S": (0x26, 0x49, 0x49, 0x49, 0x32),
+    "T": (0x03, 0x01, 0x7F, 0x01, 0x03),
+    "U": (0x3F, 0x40, 0x40, 0x40, 0x3F),
+    "V": (0x1F, 0x20, 0x40, 0x20, 0x1F),
+    "W": (0x3F, 0x40, 0x38, 0x40, 0x3F),
+    "X": (0x63, 0x14, 0x08, 0x14, 0x63),
+    "Y": (0x03, 0x04, 0x78, 0x04, 0x03),
+    "Z": (0x61, 0x59, 0x49, 0x4D, 0x43),
+    "a": (0x20, 0x54, 0x54, 0x78, 0x40),
+    "b": (0x7F, 0x28, 0x44, 0x44, 0x38),
+    "c": (0x38, 0x44, 0x44, 0x44, 0x28),
+    "d": (0x38, 0x44, 0x44, 0x28, 0x7F),
+    "e": (0x38, 0x54, 0x54, 0x54, 0x18),
+    "f": (0x00, 0x08, 0x7E, 0x09, 0x02),
+    "g": (0x18, 0xA4, 0xA4, 0x9C, 0x78),
+    "h": (0x7F, 0x08, 0x04, 0x04, 0x78),
+    "i": (0x00, 0x44, 0x7D, 0x40, 0x00),
+    "j": (0x20, 0x40, 0x40, 0x3D, 0x00),
+    "k": (0x7F, 0x10, 0x28, 0x44, 0x00),
+    "l": (0x00, 0x41, 0x7F, 0x40, 0x00),
+    "m": (0x7C, 0x04, 0x78, 0x04, 0x78),
+    "n": (0x7C, 0x08, 0x04, 0x04, 0x78),
+    "o": (0x38, 0x44, 0x44, 0x44, 0x38),
+    "p": (0xFC, 0x18, 0x24, 0x24, 0x18),
+    "q": (0x18, 0x24, 0x24, 0x18, 0xFC),
+    "r": (0x7C, 0x08, 0x04, 0x04, 0x08),
+    "s": (0x48, 0x54, 0x54, 0x54, 0x24),
+    "t": (0x04, 0x04, 0x3F, 0x44, 0x24),
+    "u": (0x3C, 0x40, 0x40, 0x20, 0x7C),
+    "v": (0x1C, 0x20, 0x40, 0x20, 0x1C),
+    "w": (0x3C, 0x40, 0x30, 0x40, 0x3C),
+    "x": (0x44, 0x28, 0x10, 0x28, 0x44),
+    "y": (0x4C, 0x90, 0x90, 0x90, 0x7C),
+    "z": (0x44, 0x64, 0x54, 0x4C, 0x44),
+    ":": (0x00, 0x00, 0x14, 0x00, 0x00),
+    ".": (0x00, 0x00, 0x60, 0x60, 0x00),
+    "/": (0x20, 0x10, 0x08, 0x04, 0x02),
+    "%": (0x23, 0x13, 0x08, 0x64, 0x62),
+    "-": (0x08, 0x08, 0x08, 0x08, 0x08),
+    "_": (0x40, 0x40, 0x40, 0x40, 0x40),
+}
+
+
+def _fmt_int(value: Any, width: int = 3) -> str:
+    if value is None:
+        return f"{'---':>{width}}"
+    return f"{int(round(float(value))):>{width}d}"
+
+
+def _fmt_temp(value: Any) -> str:
+    return f"{_fmt_int(value)}°C"
+
+
+def _fmt_gb(value: Any, width: int = 4) -> str:
+    if value is None:
+        return f"{'---':>{width}}"
+    return f"{float(value):>{width}.1f}"
+
+
+def _set_pixel(framebuffer: bytearray, x: int, y: int) -> None:
+    if x < 0 or x >= WIDTH or y < 0 or y >= HEIGHT:
+        return
+
+    framebuffer[(y // 8) * WIDTH + x] |= 1 << (y % 8)
+
+
+def _draw_scaled_pixel(framebuffer: bytearray, x: int, y: int, scale: int) -> None:
+    for dy in range(scale):
+        for dx in range(scale):
+            _set_pixel(framebuffer, x + dx, y + dy)
+
+
+def _draw_degree(framebuffer: bytearray, x: int, y: int, scale: int) -> None:
+    # Small 2x2 ring placed at the upper-left of the following C.
+    points = ((0, 0), (1, 0), (0, 1), (1, 1))
+    for px, py in points:
+        _draw_scaled_pixel(framebuffer, x + px * scale, y + py * scale, scale)
+
+
+def _draw_char(framebuffer: bytearray, x: int, y: int, char: str, scale: int = 1) -> None:
+    if len(char) != 1:
+        return
+
+    if char == "°":
+        _draw_degree(framebuffer, x, y, scale)
+        return
+
+    columns = FONT_5X7_COLUMNS.get(char)
+    if columns is None:
+        columns = FONT_5X7_COLUMNS["-"]
+
+    for col, column_bits in enumerate(columns):
+        for row in range(8):
+            if column_bits & (1 << row):
+                _draw_scaled_pixel(framebuffer, x + col * scale, y + row * scale, scale)
+
+
+def _char_width(char: str, scale: int = 1) -> int:
+    if char == "°":
+        return DEGREE_WIDTH * scale
+    return CELL_WIDTH * scale
+
+
+def _draw_text(
+    framebuffer: bytearray,
+    x: int,
+    y: int,
+    text: str,
+    max_chars: int | None = None,
+    scale: int = 1,
+) -> None:
+    if max_chars is not None:
+        text = text[:max_chars]
+
+    cursor_x = x
+    for char in text:
+        _draw_char(framebuffer, cursor_x, y, char, scale)
+        cursor_x += _char_width(char, scale)
+
+
+def _text_width(text: str, scale: int = 1) -> int:
+    if not text:
+        return 0
+
+    width = sum(_char_width(char, scale) for char in text)
+    last = text[-1]
+    trailing_space = (CELL_WIDTH - GLYPH_WIDTH) * scale if last != "°" else 0
+    return width - trailing_space
+
+
+def render_frame(stats: dict) -> bytes:
+    framebuffer = bytearray(FRAMEBUFFER_SIZE)
+
+    time_text = datetime.now().strftime("%H:%M")
+    _draw_text(framebuffer, (WIDTH - _text_width(time_text, scale=2)) // 2, 0, time_text, scale=2)
+
+    cpu = (
+        f"CPU {_fmt_int(stats.get('cpu_usage_percent'))}% "
+        f"{_fmt_temp(stats.get('cpu_temp_c'))} "
+        f"{_fmt_int(stats.get('cpu_power_w'))}W"
+    )
+    gpu = (
+        f"GPU {_fmt_int(stats.get('gpu_usage_percent'))}% "
+        f"{_fmt_temp(stats.get('gpu_temp_c'))} "
+        f"{_fmt_int(stats.get('gpu_power_w'))}W"
+    )
+    ram = f"RAM {_fmt_gb(stats.get('ram_used_gb'))}G"
+
+    _draw_text(framebuffer, 0, 20, cpu, max_chars=21)
+    _draw_text(framebuffer, 0, 32, gpu, max_chars=21)
+    _draw_text(framebuffer, 0, 44, ram, max_chars=21)
+
+    return bytes(framebuffer)
+
+
+def render_test_pattern() -> bytes:
+    framebuffer = bytearray(FRAMEBUFFER_SIZE)
+
+    for x in range(WIDTH):
+        _set_pixel(framebuffer, x, 0)
+        _set_pixel(framebuffer, x, HEIGHT - 1)
+    for y in range(HEIGHT):
+        _set_pixel(framebuffer, 0, y)
+        _set_pixel(framebuffer, WIDTH - 1, y)
+    for i in range(min(WIDTH, HEIGHT)):
+        _set_pixel(framebuffer, i, i)
+        _set_pixel(framebuffer, WIDTH - 1 - i, i)
+
+    return bytes(framebuffer)
